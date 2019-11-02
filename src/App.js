@@ -11,7 +11,7 @@ import Register from './components/register/Register';
 
 import './App.css';
 
-const KEY = 'YOU OWN CLARIFAI KEY HERE';
+const KEY = '1d87e7571a6d45de9b0acc94b0e30a6e';
 
 const app = new Clarifai.App({
   apiKey: KEY,
@@ -36,16 +36,37 @@ const particlesOptions = {
   }
 }
 
+const initialState = {
+  input: '',
+  imageUrl: '',
+  boxes: [],
+  route: 'signin',
+  isSignedIn: false,
+  user: {
+    id: '',
+    email: '',
+    name: '',
+    entries: 0,
+    joined: '',
+  }
+};
+
 class App extends Component {
   constructor(props) {
     super(props);
-    this.state = {
-      input: '',
-      imageUrl: '',
-      boxes: [],
-      route: 'signin',
-      isSignedIn: false,
-    };
+    this.state = initialState;
+  }
+
+  loadUser = (data) => {
+    this.setState({
+      user: {
+        id: data.id,
+        name: data.name,
+        email: data.email,
+        entries: data.entries,
+        joined: data.joined,
+      }
+    })
   }
 
   calculateFaceLocation = data => {
@@ -79,6 +100,29 @@ class App extends Component {
     }, () => {
       app.models.predict(Clarifai.FACE_DETECT_MODEL, this.state.imageUrl)
       .then(response => {
+        if (response) {
+          fetch('http://localhost:3000/image', {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              id: this.state.user.id,
+            })
+          })
+          .then(res => res.json())
+          .then(count => {
+            this.setState(prevState => {
+              return {
+                user: {
+                  ...prevState.user,
+                  entries: count,
+                }
+              }
+            })
+          })
+          .catch(err => console.log('failed to update image count'))
+        }
         this.calculateFaceLocation(response);
       })
       .catch(err => {
@@ -87,12 +131,9 @@ class App extends Component {
     })
   }
 
-  onRouteChange = (event, route) => {
-    event.preventDefault();
+  onRouteChange = (route) => {
     if (route === 'signin') {
-      this.setState({
-        isSignedIn: false,
-      })
+      this.setState(initialState);
     } else if (route === 'home') {
       this.setState({
         isSignedIn: true,
@@ -112,15 +153,15 @@ class App extends Component {
         />
         <Navigation onRouteChange={this.onRouteChange} isSignedIn={this.state.isSignedIn} />
         {this.state.route === 'signin' &&
-          <Signin onRouteChange={this.onRouteChange} />
+          <Signin onRouteChange={this.onRouteChange} loadUser={this.loadUser} />
         }
         {this.state.route === 'register' &&
-          <Register onRouteChange={this.onRouteChange} />
+          <Register onRouteChange={this.onRouteChange} loadUser={this.loadUser} />
         }
         {this.state.route === 'home' &&
           <React.Fragment>
             <Logo />
-            <Rank />
+            <Rank name={this.state.user.name} entries={this.state.user.entries} />
             <ImageLinkForm onInputChange={this.onInputChange} onButtonSubmit={this.onButtonSubmit} />
             <FaceRecognition imageUrl={this.state.imageUrl} boxes={this.state.boxes} />
           </React.Fragment>
